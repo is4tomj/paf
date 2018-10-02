@@ -32,13 +32,20 @@ func main() {
 	}
 
 	// content of program
-	switch os.Args[1] {
+	if len(os.Args) < 2 {
+		pes(`
+gen-creds: generate usernames-password pairs
+gen-salts: generate salts
+`)
+	} else {
+		switch os.Args[1] {
 		case "gen-creds":
 			genCreds()
 		case "gen-salts":
 			genSalts()
+		}
+
 	}
-	
 	pes("Done, Byee\n")
 
 	// memory profile stuff

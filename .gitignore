@@ -1,5 +1,8 @@
+*.prof
 *.paf
 */*.paf
+*.txt
+*/*.txt
 *.csv
 */*.csv
 *.bak

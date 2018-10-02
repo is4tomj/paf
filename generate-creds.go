@@ -15,10 +15,6 @@ import (
 	"strconv"
 )
 
-const (
-	elems = byte(uint8(2))
-)
-
 //////////////////////////////////
 // This random string generator is from [this post](https://stackoverflow.com/a/31832326)
 
@@ -229,14 +225,14 @@ Examples:
 					password := randPassword(&src, passwordLengths[i])
 					
 					//pes(sprintf("[%d] %d: %s, %s\n", pid, i, username, password))
-					buff.WriteByte(elems)
+					/*buff.WriteByte(elems2)
 					buff.WriteByte(byte(len(username)))
 					buff.Write([]byte(username))
 					buff.WriteByte(byte(len(password)))
-					buff.Write([]byte(password))
+					buff.Write([]byte(password))*/
 					
 					// for testing 
-					//buff.Write([]byte(username+"\n"+password+"\n"))
+					buff.Write([]byte(username+"\t"+password+"\n"))
 				}
 				
 				po(buff.Bytes())
