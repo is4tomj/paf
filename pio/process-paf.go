@@ -1,28 +1,28 @@
 package pio
 
 import (
-	"os"
 	"io"
+	"os"
 	"sync"
 )
 
-func ProcessIrregularFile(inputPath string, chunkSize, numProcs int, initFunc func(int,int64), processFunc func(int,*Chunk)) {
-	chunks, fileSize, err := FindDataChunksInFile(inputPath, chunkSize, numProcs+1)
+func Process(inputPath string, chunkSize, numProcs int, initFunc func(int, int64), processFunc func(int, *Chunk)) {
+	chunks, fileSize, err := FindDataChunks(inputPath, chunkSize, numProcs+1)
 	if err != nil {
 		pesf(err.Error())
 		return
 	}
-	
+
 	// Spin up goroutines
 	var wg sync.WaitGroup
 	wg.Add(numProcs)
-	for i:=0; i < numProcs; i++ {
+	for i := 0; i < numProcs; i++ {
 		go func(pid int) {
 			defer wg.Done()
 			if initFunc != nil {
 				initFunc(pid, fileSize)
 			}
-			
+
 			for chunk := range chunks {
 				if processFunc != nil {
 					processFunc(pid, chunk)
@@ -31,14 +31,13 @@ func ProcessIrregularFile(inputPath string, chunkSize, numProcs int, initFunc fu
 		}(i)
 	}
 
-	// Wait to close 
+	// Wait to close
 	wg.Wait()
 
 }
 
-
-func FindDataChunksInFile(inputPath string, chunkSize,chanSize int) (chan *Chunk, int64, error) {
-	file, err:= os.Open(inputPath)	
+func FindDataChunks(inputPath string, chunkSize, chanSize int) (chan *Chunk, int64, error) {
+	file, err := os.Open(inputPath)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -53,7 +52,7 @@ func FindDataChunksInFile(inputPath string, chunkSize,chanSize int) (chan *Chunk
 		panic(err)
 	}
 	fileSize := fileStats.Size()
-	
+
 	// Create Chunks
 	chunks := make(chan *Chunk, chanSize)
 	entryPoint := int64(0)
@@ -66,7 +65,7 @@ func FindDataChunksInFile(inputPath string, chunkSize,chanSize int) (chan *Chunk
 		defer file.Close()
 		for true {
 			// get last 1024 bytes of proposed chunk
-			n, err := file.ReadAt(buff, (entryPoint + int64(size)) - delta)
+			n, err := file.ReadAt(buff, (entryPoint+int64(size))-delta)
 			if err != nil && err != io.EOF {
 				pesf(err.Error() + "\n")
 				return
@@ -74,7 +73,7 @@ func FindDataChunksInFile(inputPath string, chunkSize,chanSize int) (chan *Chunk
 
 			// last chunk
 			if err == io.EOF {
-				dataSize := int(fileSize-entryPoint)
+				dataSize := int(fileSize - entryPoint)
 				chunks <- &Chunk{inputPath, entryPoint, dataSize, dataSize}
 				return
 			}
