@@ -6,8 +6,9 @@ import (
 	"sync"
 )
 
+// Process will loop through the chunks in a paf file and execute the function passed
 func Process(inputPath string, chunkSize, numProcs int, initFunc func(int, int64), processFunc func(int, *Chunk)) {
-	chunks, fileSize, err := FindDataChunks(inputPath, chunkSize, numProcs+1)
+	chunks, fileSize, err := findDataChunks(inputPath, chunkSize, numProcs+1)
 	if err != nil {
 		pesf(err.Error())
 		return
@@ -36,7 +37,8 @@ func Process(inputPath string, chunkSize, numProcs int, initFunc func(int, int64
 
 }
 
-func FindDataChunks(inputPath string, chunkSize, chanSize int) (chan *Chunk, int64, error) {
+// FindDataChunks finds the chunks in a paf file
+func findDataChunks(inputPath string, chunkSize, chanSize int) (chan *Chunk, int64, error) {
 	file, err := os.Open(inputPath)
 	if err != nil {
 		return nil, 0, err
