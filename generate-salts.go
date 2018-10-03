@@ -11,7 +11,6 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
-	//"paf/pio"
 )
 
 func genSalts() {
@@ -75,13 +74,7 @@ Examples:
 						start := i*(*saltLength)
 						end := start + (*saltLength)
 						salt := hex.EncodeToString(saltBuff[start:end])
-						
-						buff.WriteByte(elems1)
-						buff.WriteByte(byte(*saltLength))
-						buff.Write([]byte(salt))
-						
-						// for testing 
-						//buff.Write([]byte(salt+"\n"))
+						buff.Write([]byte(salt+"\n"))
 					}
 					
 					po(buff.Bytes())

@@ -206,7 +206,8 @@ Examples:
 		go func(pid int) {
 			defer wg.Done()
 
-			// math.rand is not thread safe, so must create separately for each thread.
+			// math.rand is not thread safe, so must create
+			// separately for each thread.
 			src := mrand.NewSource(time.Now().UnixNano())
 			var buff bytes.Buffer;
 			
@@ -223,13 +224,6 @@ Examples:
 						username  += "@" + randstr(&src, domainLengths[i]) + myTLDs[i]
 					}
 					password := randPassword(&src, passwordLengths[i])
-					
-					//pes(sprintf("[%d] %d: %s, %s\n", pid, i, username, password))
-					/*buff.WriteByte(elems2)
-					buff.WriteByte(byte(len(username)))
-					buff.Write([]byte(username))
-					buff.WriteByte(byte(len(password)))
-					buff.Write([]byte(password))*/
 					
 					// for testing 
 					buff.Write([]byte(username+"\t"+password+"\n"))
