@@ -43,10 +43,14 @@ gen-salts: generate salts
 			genCreds()
 		case "gen-salts":
 			genSalts()
+		case "hash":
+			hash()
+		case "sort":
+			sortByHash()
 		}
 
 	}
-	pes("Done, Byee\n")
+	pes("Done, byee\n")
 
 	// memory profile stuff
 	memprofile := os.Getenv("MEMPROF")

@@ -7,12 +7,20 @@ import (
 )
 
 // Process will loop through the chunks in a paf file and execute the function passed
-func Process(inputPath string, chunkSize, numProcs int, initFunc func(int, int64), processFunc func(int, *Chunk)) {
-	chunks, fileSize, err := findDataChunks(inputPath, chunkSize, numProcs+1)
+func Process(file *os.File, chunkSize, numProcs int, initFunc func(int, int64), processFunc func(int, *Chunk)) {
+	chunks, fileSize, err := findDataChunks(file, chunkSize)
 	if err != nil {
 		pesf(err.Error())
 		return
 	}
+
+	// Create chunkChan
+	numChunks := len(chunks)
+	chunksChan := make(chan *Chunk, numChunks)
+	for _, chunk := range chunks {
+		chunksChan <- chunk
+	}
+	pes(sprintf("chunks:%d\n", numChunks))
 
 	// Spin up goroutines
 	var wg sync.WaitGroup
@@ -24,7 +32,10 @@ func Process(inputPath string, chunkSize, numProcs int, initFunc func(int, int64
 				initFunc(pid, fileSize)
 			}
 
-			for chunk := range chunks {
+			for chunk := range chunksChan {
+				numToGo := len(chunksChan)
+				numDone := numChunks - numToGo
+				pes(sprintf("\rFinished %d of %d (%d%%)", numDone, numChunks, (numDone*100)/numChunks))
 				if processFunc != nil {
 					processFunc(pid, chunk)
 				}
@@ -32,21 +43,18 @@ func Process(inputPath string, chunkSize, numProcs int, initFunc func(int, int64
 		}(i)
 	}
 
-	// Wait to close
+	// Close and wait
+	close(chunksChan)
 	wg.Wait()
-
+	pes(sprintf("\rFinished processing %d chunks.                       \n", numChunks))
 }
 
 // FindDataChunks finds the chunks in a paf file
-func findDataChunks(inputPath string, chunkSize, chanSize int) (chan *Chunk, int64, error) {
-	file, err := os.Open(inputPath)
-	if err != nil {
-		return nil, 0, err
-	}
+func findDataChunks(file *os.File, chunkSize int) ([]*Chunk, int64, error) {
 
 	const maxInt = 2147483647
 	if chunkSize <= 1024 {
-		panic(sprintf("%s Chunk size cannot be less than one KB.", ep))
+		panic(sprintf("%s Chunk size cannot be less than one KB.", Ep))
 	}
 
 	fileStats, err := file.Stat()
@@ -55,47 +63,48 @@ func findDataChunks(inputPath string, chunkSize, chanSize int) (chan *Chunk, int
 	}
 	fileSize := fileStats.Size()
 
+	// Calculate number of chunks
+	numChunks := (fileSize / int64(chunkSize)) + int64(1)
+	chunks := make([]*Chunk, numChunks)
+
 	// Create Chunks
-	chunks := make(chan *Chunk, chanSize)
 	entryPoint := int64(0)
 	size := chunkSize
 	const delta = 1024
 	buff := make([]byte, delta)
 	num := int64(0)
-	go func() {
-		defer close(chunks)
-		defer file.Close()
-		for true {
-			// get last 1024 bytes of proposed chunk
-			n, err := file.ReadAt(buff, (entryPoint+int64(size))-delta)
-			if err != nil && err != io.EOF {
-				pesf(err.Error() + "\n")
-				return
-			}
 
-			// last chunk
-			if err == io.EOF {
-				dataSize := int(fileSize - entryPoint)
-				chunks <- &Chunk{inputPath, entryPoint, dataSize, dataSize}
-				return
+	for i := 0; true; i++ {
+		// get last 1024 bytes of proposed chunk
+		n, err := file.ReadAt(buff, (entryPoint+int64(size))-delta)
+		if err != nil && err != io.EOF {
+			return nil, fileSize, err
+		}
+		
+		// last chunk
+		if err == io.EOF {
+			dataSize := int(fileSize - entryPoint)
+			//chunks = append(chunks, &Chunk{entryPoint, dataSize, dataSize, file})
+			chunks[i] = &Chunk{entryPoint, dataSize, dataSize, file}
+			return chunks, fileSize, nil
+		}
+		
+		j := n - 1
+		for j >= 0 {
+			if buff[j] == Nl {
+				//chunks = append(chunks, &Chunk{entryPoint, size, size, file})
+				chunks[i] = &Chunk{entryPoint, size, size, file}
+				num++
+				entryPoint = entryPoint + int64(size)
+				size = chunkSize
+				break
 			}
-
-			j := n - 1
-			for j >= 0 {
-				if buff[j] == nl {
-					chunks <- &Chunk{inputPath, entryPoint, size, size}
-					num++
-					entryPoint = entryPoint + int64(size)
-					size = chunkSize
-					break
-				}
-				j--
-				size--
-			}
+			j--
+			size--
 			// If no '\n' is in the last 1024 bytes, then go back to
 			// the top of the loop and get the next 1024 to find '\n'.
 		}
-	}()
-
+	}
+	
 	return chunks, fileSize, nil
 }

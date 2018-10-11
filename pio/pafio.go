@@ -6,8 +6,9 @@ import (
 	"sync"
 )
 
-const nl = byte('\n')
-const ep = "ლ(ಠ益ಠლ)"
+const Nl = byte('\n')
+const Tl = byte('\n')
+const Ep = "ლ(ಠ益ಠლ)"
 
 var pe = os.Stderr.Write
 var sprintf = fmt.Sprintf

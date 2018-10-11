@@ -7,19 +7,15 @@ import (
 )
 
 type Chunk struct {
-	inputPath  string
 	EntryPoint int64 // in bytes
 	Size       int   // in bytes
 	DataSize   int   // in bytes
+	file *os.File
 }
 
-func (chunk *Chunk) Bytes(buff *[]byte) ([]byte, int, error) {
-	file, err := os.Open(chunk.inputPath)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer file.Close()
-
+func (chunk *Chunk)Bytes(buff *[]byte) ([]byte, int, error) {
+	file := chunk.file
+	
 	// check if byte buffer is already provided
 	if buff == nil || cap(*buff) < chunk.Size {
 		arr := make([]byte, chunk.Size+4096) // 4096 is a magic number
@@ -54,7 +50,7 @@ func NewLineScanner(b []byte) func() ([]byte, int) {
 			return nil, 0
 		}
 		for start = end; end < max; end++ {
-			if b[end] == nl { // look for newline char
+			if b[end] == Nl { // look for newline char
 				return b[start:end], end - start
 			}
 		}
