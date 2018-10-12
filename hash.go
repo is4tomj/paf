@@ -11,8 +11,6 @@ import (
 	"paf/pio"
 )
 
-const chunkSize = 2^24
-
 func hash() {
 	hashFlags := flag.NewFlagSet("hash", flag.ContinueOnError)
 	numProcs := hashFlags.Int("num-procs", 1, "number of processors")

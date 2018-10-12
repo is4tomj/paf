@@ -12,6 +12,8 @@ var po = os.Stdout.Write
 var pe = os.Stderr.Write
 var sprintf = fmt.Sprintf
 
+const chunkSize = 2^24
+
 func pes(str string) {
 	pe([]byte(str))
 }
@@ -47,6 +49,10 @@ gen-salts: generate salts
 			hash()
 		case "sort":
 			sortByHash()
+		case "enc":
+			encrypt()
+		case "dec":
+			decrypt()
 		}
 
 	}

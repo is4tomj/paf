@@ -17,8 +17,8 @@ func Process(file *os.File, chunkSize, numProcs int, initFunc func(int, int64), 
 	// Create chunkChan
 	numChunks := len(chunks)
 	chunksChan := make(chan *Chunk, numChunks)
-	for _, chunk := range chunks {
-		chunksChan <- chunk
+	for i:=0; i<numChunks; i++ {
+		chunksChan <- chunks[i]
 	}
 	pes(sprintf("chunks:%d\n", numChunks))
 
@@ -65,16 +65,16 @@ func findDataChunks(file *os.File, chunkSize int) ([]*Chunk, int64, error) {
 
 	// Calculate number of chunks
 	numChunks := (fileSize / int64(chunkSize)) + int64(1)
-	chunks := make([]*Chunk, numChunks)
+	chunks := make([]*Chunk, numChunks*2)
 
 	// Create Chunks
 	entryPoint := int64(0)
 	size := chunkSize
 	const delta = 1024
 	buff := make([]byte, delta)
-	num := int64(0)
 
-	for i := 0; true; i++ {
+	i := 0
+	for ; true; i++ {
 		// get last 1024 bytes of proposed chunk
 		n, err := file.ReadAt(buff, (entryPoint+int64(size))-delta)
 		if err != nil && err != io.EOF {
@@ -84,17 +84,14 @@ func findDataChunks(file *os.File, chunkSize int) ([]*Chunk, int64, error) {
 		// last chunk
 		if err == io.EOF {
 			dataSize := int(fileSize - entryPoint)
-			//chunks = append(chunks, &Chunk{entryPoint, dataSize, dataSize, file})
 			chunks[i] = &Chunk{entryPoint, dataSize, dataSize, file}
-			return chunks, fileSize, nil
+			break
 		}
 		
 		j := n - 1
 		for j >= 0 {
 			if buff[j] == Nl {
-				//chunks = append(chunks, &Chunk{entryPoint, size, size, file})
 				chunks[i] = &Chunk{entryPoint, size, size, file}
-				num++
 				entryPoint = entryPoint + int64(size)
 				size = chunkSize
 				break
@@ -105,6 +102,5 @@ func findDataChunks(file *os.File, chunkSize int) ([]*Chunk, int64, error) {
 			// the top of the loop and get the next 1024 to find '\n'.
 		}
 	}
-	
-	return chunks, fileSize, nil
+	return chunks[:i+1], fileSize, nil
 }
