@@ -5,7 +5,9 @@ import (
 	"io/ioutil"
 	"flag"
 	"bufio"
+	"bytes"
 	"paf/pio"
+	"compress/flate"
 )
 
 func encrypt() {
@@ -14,7 +16,7 @@ func encrypt() {
 	numProcs := crypFlags.Int("num-procs", 1, "number of processors")
 	passphraseFlag := crypFlags.String("passphrase", "", "file to read")
 	chunkSizeFlag := crypFlags.Int("chunk-size", 100000, "approx size of each block")
-	
+	compressLevelFlag := crypFlags.Int("compress", 0, "change from 1 (best speed) to 9 (best compression)")
 
 	if err := crypFlags.Parse(os.Args[2:]); err != nil || len(os.Args[2:]) == 0 || *inputFile == "" {
 		pes(`
@@ -43,11 +45,22 @@ Examples:
 		os.Exit(1)
 	}
 	defer file.Close()
-	
+
 	encChunkWrite := pio.NewEncryptedPafWriter(os.Stdout, passphrase)
 
 	pes("Starting to process\n")
-	pio.Process(file, chunkSize*(*chunkSizeFlag), *numProcs, nil, func(pid int, chunk *pio.Chunk) {
+	buffers := make([]*bytes.Buffer, *numProcs)
+	writers := make([]flate.Writer, *numProcs)
+	pio.Process(file, chunkSize*(*chunkSizeFlag), *numProcs, func(pid int, fileSize int64) {
+		var b bytes.Buffer
+		buffers[pid] = &b
+		w, err := flate.NewWriter(&b, *compressLevelFlag)
+		if err != nil {
+			panic(err)
+		}
+		writers[pid] = *w
+		
+	}, func(pid int, chunk *pio.Chunk) {
 		buff, n, err := (*chunk).Bytes(nil)
 		
 		if err != nil {
@@ -57,10 +70,21 @@ Examples:
 			pes(sprintf("Shit! n is less than zero: %d.", n))
 			os.Exit(1)
 		} else {
-			err := encChunkWrite(buff)
+
+			w := writers[pid]
+			b := buffers[pid]
+			b.Reset()
+			w.Reset(b)
+			w.Write(buff)
+			w.Flush() // this is a must
+			res := (*b).Bytes()
+
+			// encrypt and print to stdout
+			err := encChunkWrite(res)
 			if err != nil {
 				panic(err)
 			}
+
 		}
 	})
 

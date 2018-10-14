@@ -2,10 +2,13 @@ package main
 
 import (
 	"os"
+	"io"
 	"io/ioutil"
 	"flag"
 	"bufio"
 	"paf/pio"
+	"compress/flate"
+	"bytes"
 )
 
 func decrypt() {
@@ -41,7 +44,7 @@ Examples:
 		os.Exit(1)
 	}
 	defer file.Close()
-	
+
 	pes("Starting to process\n")
 	pio.ProcessEncryptedPaf(file, passphrase, *numProcs, nil, func(pid int, buff []byte) {
 		n := len(buff)
@@ -50,7 +53,11 @@ Examples:
 			os.Exit(1)
 		}
 
-		po(buff)
+		// deflate
+		b := bytes.NewReader(buff)
+		r := flate.NewReader(b)
+		io.Copy(os.Stdout, r)
+		r.Close()
 	})
 
 }

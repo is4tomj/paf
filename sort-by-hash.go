@@ -84,7 +84,7 @@ Examples:
 					_, err := base64.URLEncoding.Decode(hashDecBytes, hashEncBytes)
 					if err != nil {
 						pes("Shit!")
-						panic(0)
+						panic(err)
 					}
 				}
 				// get the first (most significant) two bytes
