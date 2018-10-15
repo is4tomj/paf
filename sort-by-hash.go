@@ -7,8 +7,21 @@ import (
 	"bytes"
 	"flag"
 	"os"
+	"io"
+	"io/ioutil"
 	"sync"
+	"time"
 )
+
+func deleteTmpDir(path string) {
+	if _, err := os.Stat(path); os.IsExist(err) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			pes(err.Error())
+			os.Exit(1)
+		}
+	}
+}
 
 func sortByHash() {
 	sortFlags := flag.NewFlagSet("hash", flag.ContinueOnError)
@@ -18,14 +31,13 @@ func sortByHash() {
 
 	tmpPath := sortFlags.String("tmp-dir", ".tmp", "directory to temporarily store files during sort")
 
-	hexEnc := sortFlags.Bool("hex", true, "output hashes encoded in hex")
-	base64Enc := sortFlags.Bool("base64", false, "output hashes encoded in base64")
+	base64Enc := sortFlags.Bool("base64", false, "output hashes encoded in base64 instead of hex (default)")
 
 	if err := sortFlags.Parse(os.Args[2:]); err != nil || len(os.Args[2:]) == 0 || *inputFile == "" {
 		pes(`
 Sort a column in a paf file with hash and print to stdout.
 Examples:
-    $ paf sort --num-procs 4 --input-file input.paf --col=0 --hex --tmp-dir data/tmp
+    $ paf sort --num-procs 4 --input-file input.paf --col=0 --tmp-dir data/tmp
 `)
 		os.Exit(1)
 	}
@@ -37,16 +49,9 @@ Examples:
 	}
 	defer file.Close()
 
-	// delete tmp dir if already exists
+	// delete (if needed) and make tmp dir
 	pes(sprintf("Preparing tmp directory:%s\n", (*tmpPath)))
-	if _, err := os.Stat(*tmpPath); os.IsExist(err) {
-		err := os.RemoveAll(*tmpPath)
-		if err != nil {
-			pes(err.Error())
-			os.Exit(1)
-		}
-	}
-	// create tmp dir
+	deleteTmpDir(*tmpPath)
 	os.MkdirAll(*tmpPath, os.ModePerm)
 
 	// initialize tmpfiles
@@ -54,13 +59,22 @@ Examples:
 	tmpFiles := make([]*TmpFile,max+1)
 	for i:=0; i<=max; i++ {
 		path := (*tmpPath)+sprintf("/%04x",uint16(i))
-		tmpFiles[i] = &TmpFile{path: path, count: 0, mux: &sync.Mutex{}}
+		count := 0
+		tmpFiles[i] = &TmpFile{path: path, buff: &bytes.Buffer{}, mux: &sync.Mutex{}, count: &count}
 	}
 
-	pes("Starting to process\n")
+	// set decode function for comparisons
+	decodeFunc := hex.Decode
+	if *base64Enc {
+		decodeFunc = base64.URLEncoding.Decode
+	}
+	
+	pes("Presorting into tmp files.\n")
+	start := time.Now()
+
 	pio.Process(file, chunkSize*100000, *numProcs, nil, func(pid int, chunk *pio.Chunk) {
 		buff, n, err := (*chunk).Bytes(nil)
-		
+
 		if err != nil {
 			pes(err.Error())
 			os.Exit(1)
@@ -71,40 +85,36 @@ Examples:
 			// traverse lines
 			scan := pio.NewLineScanner(buff)
 			for line, lineLen := scan(); lineLen > 0; line, lineLen = scan() {
+				
 				// read line
 				hashEncBytes := bytes.Split(line,[]byte("\t"))[*column]
 				hashDecBytes := make([]byte, 32)
-				if *hexEnc {
-					_, err := hex.Decode(hashDecBytes, hashEncBytes)
-					if err != nil {
-						pes("Shit!")
-						panic(0)
-					}
-				} else if *base64Enc {
-					_, err := base64.URLEncoding.Decode(hashDecBytes, hashEncBytes)
-					if err != nil {
-						pes("Shit!")
-						panic(err)
-					}
+				_, err := decodeFunc(hashDecBytes, hashEncBytes)
+				if err != nil {
+					pes("Shit!")
+					panic(0)
 				}
 				// get the first (most significant) two bytes
 				idx := int32(uint16(hashDecBytes[0]) << 8 | uint16(hashDecBytes[1]))
-				tmpFile := tmpFiles[idx]
-				(*tmpFile).write(line)
+				tf := *(tmpFiles[idx])
+				tf.Write(line)
 			}
 		}
 	})
-
+	
 	// flush tmpFiles and create sorting channel
-	tmpFileSortChan := make(chan *TmpFile, max)
-	doneChan := make(chan *TmpFile, max)
+	tmpFileSortChan := make(chan *TmpFile, max + 1)
+	doneChan := make(chan *TmpFile, max + 1)
 	pes("Flushing tmp files.\n")
 	for i:=0; i<=max; i++ {
 		tmpFile := tmpFiles[i]
-		(*tmpFile).flush()
+		(*tmpFile).Flush()
+		tmpFileSortChan <- tmpFile
 	}
+	pes(sprintf("  finished in %.2f minutes.\n", time.Now().Sub(start).Minutes()))
 
 	// sort tmp files
+	start = time.Now()
 	var wg sync.WaitGroup
 	wg.Add(*numProcs)
 	for i := 0; i < *numProcs; i++ {
@@ -113,11 +123,10 @@ Examples:
 			for tmpFile := range tmpFileSortChan {
 				// sort
 				done := len(doneChan)
-				todo := len(tmpFileSortChan)
-				working := max - (todo + done)
-				pes(sprintf("\rSorting %d files, finished %d of %d (%d%%)\t\t\r", working, done, max, (done*100)/max))
-				(*tmpFile).sort(*column)
-
+				pes(sprintf("\rSorting each tmp file and finished %d of %d (%d%%)", done, max, (done*100)/max))
+				tf := *tmpFile
+				sortedBuff, _ := tf.Sort(*column, decodeFunc)
+				ioutil.WriteFile(tf.path, sortedBuff.Bytes(), 0644)
 				doneChan <- tmpFile
 			}
 		}(i)
@@ -126,7 +135,31 @@ Examples:
 	close(tmpFileSortChan)
 	wg.Wait()
 	close(doneChan)
+	pes("\nFinished sorting in each tmp file.\n")
+	pes(sprintf("  finished in %.2f minutes.\n", time.Now().Sub(start).Minutes()))
 
-	// append files to stdout
+
+	// append files to stdout and delete tmp files.
+	start = time.Now()
+	for i:=0; i<=max; i++ {
+		pes(sprintf("\rConcatenating tmp files: %d of %d (%d%%)", i+1, max, 100*(i+1)/max))
+		tf := *(tmpFiles[i])
+		
+		in, err := os.Open(tf.path)
+		if err != nil {
+			panic(err)
+		}
+		
+		_, err = io.Copy(os.Stdout, in)
+		if err != nil {
+			panic(err)
+		}
+		in.Close()
+		if err = os.Remove(tf.path); err != nil {
+			panic(err)
+		}
+	}
+	pes(sprintf("  finished in %.2f minutes.\n", time.Now().Sub(start).Minutes()))
 	
+	deleteTmpDir(*tmpPath)
 }

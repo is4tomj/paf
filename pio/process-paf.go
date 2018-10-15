@@ -20,7 +20,6 @@ func Process(file *os.File, chunkSize, numProcs int, initFunc func(int, int64), 
 	for i:=0; i<numChunks; i++ {
 		chunksChan <- chunks[i]
 	}
-	pes(sprintf("chunks:%d\n", numChunks))
 
 	// Spin up goroutines
 	var wg sync.WaitGroup
@@ -35,7 +34,7 @@ func Process(file *os.File, chunkSize, numProcs int, initFunc func(int, int64), 
 			for chunk := range chunksChan {
 				numToGo := len(chunksChan)
 				numDone := numChunks - numToGo
-				pes(sprintf("\rFinished %d of %d (%d%%)", numDone, numChunks, (numDone*100)/numChunks))
+				pes(sprintf("\rprocessed %d of %d (%d%%) chunks", numDone, numChunks, (numDone*100)/numChunks))
 				if processFunc != nil {
 					processFunc(pid, chunk)
 				}
