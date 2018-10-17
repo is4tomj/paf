@@ -16,14 +16,14 @@ func encrypt() {
 	numProcs := crypFlags.Int("num-procs", 1, "number of processors")
 	passphraseFlag := crypFlags.String("passphrase", "", "file to read")
 	chunkSizeFlag := crypFlags.Int("chunk-size", 100000, "approx size of each block")
-	compressLevelFlag := crypFlags.Int("compress", 0, "change from 1 (best speed) to 9 (best compression)")
-
+	compressLevelFlag := crypFlags.Int("compress", 0, "change from 1 (best speed) to 9 (best compression), 0 (default) no compression")
+	
 	if err := crypFlags.Parse(os.Args[2:]); err != nil || len(os.Args[2:]) == 0 || *inputFile == "" {
 		pes(`
 Enc lets you encrypt a paf using Go's GCM cipher. The passphrase can be passed using STDIN. The result is printed to STDOUT.
 
 Examples:
-  $ echo "passphrase" | paf enc "cheeseflakes" --input-file plaintext.paf > ciphertext.epaf
+  $ echo -n "cheeseflakes" | paf enc --input-file plaintext.paf --compress 0 > ciphertext.epaf
   $ paf enc --passphrase "cheeseflakes" --input-file plaintext.paf > ciphertext.epaf
 `)
 		os.Exit(1)
@@ -71,6 +71,7 @@ Examples:
 			os.Exit(1)
 		} else {
 
+			// compress
 			w := writers[pid]
 			b := buffers[pid]
 			b.Reset()

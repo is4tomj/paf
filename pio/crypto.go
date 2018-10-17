@@ -26,6 +26,7 @@ func encrypt(data []byte, key [32]byte) []byte {
 	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
 		panic(err.Error())
 	}
+	// appending the result to nonce
 	ciphertext := gcm.Seal(nonce, nonce, data, nil)
 	return ciphertext
 }
@@ -160,7 +161,7 @@ func ProcessEncryptedPaf(file *os.File, passphrase string, numProcs int, initFun
 		}
 	}
 
-	// Spin up goroutines
+	// Spin up goroutines and decrypt
 	var wg sync.WaitGroup
 	wg.Add(numProcs)
 	for i := 0; i < numProcs; i++ {
