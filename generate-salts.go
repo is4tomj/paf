@@ -11,12 +11,17 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/base64"
 )
 
 func genSalts() {
 	genSaltsFlags := flag.NewFlagSet("gen-salts", flag.ContinueOnError)
+
 	numSalts := genSaltsFlags.Int("num-salts", 100000000, "number of salts to generate")
 	saltLength := genSaltsFlags.Int("salt-len", 20, "number of bytes")
+
+	base64Flag := genSaltsFlags.Bool("base64", false, "output salts in base 64 [a-zA-Z0-9+/], default is hex (base16)")
+	
 	runSize := genSaltsFlags.Int("run-size", 10000, "number of salts to generate per run")
 	numProcs := genSaltsFlags.Int("num-procs", 1 , "number of processors")
 
@@ -52,6 +57,11 @@ Examples:
 	if modRuns > 0 {
 		runChan <- modRuns
 	}
+
+	encodeFunc := hex.EncodeToString
+	if *base64Flag {
+		encodeFunc = base64.StdEncoding.EncodeToString
+	}
 	
 	var wg sync.WaitGroup
 	wg.Add(*numProcs)
@@ -73,7 +83,7 @@ Examples:
 					for i:=0; i<run; i++ {
 						start := i*(*saltLength)
 						end := start + (*saltLength)
-						salt := hex.EncodeToString(saltBuff[start:end])
+						salt := encodeFunc(saltBuff[start:end])
 						buff.Write([]byte(salt+"\n"))
 					}
 					
