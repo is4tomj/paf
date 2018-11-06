@@ -17,7 +17,7 @@ func hash() {
 	inputFile := hashFlags.String("file", "", "file to read")
 	inputFields := hashFlags.String("input-fields", "usr,pwd", "name of input fields")
 	outputFields := hashFlags.String("output-fields", "usr,pwd", "name of output fields")
-
+	chunkSize := hashFlags.Int("chunk-size", initChunkSize, sprintf("approx. size of chunks (%d default)",initChunkSize))
 	sha256Fields := hashFlags.String("sha256-fields", "", "run sha256 function on the fields")
 	hexEnc := hashFlags.Bool("hex", false, "output hashes encoded in hex")
 	base64Enc := hashFlags.Bool("base64", false, "output hashes encoded in base64")
@@ -61,7 +61,7 @@ Examples:
 	defer file.Close()
 
 	
-	pio.Process(file, chunkSize*100000, *numProcs, nil, func(pid int, chunk *pio.Chunk) {
+	pio.Process(file, *chunkSize, *numProcs, nil, func(pid int, chunk *pio.Chunk) {
 		buff, n, err := (*chunk).Bytes(nil)
 		if err != nil {
 			pes(err.Error())

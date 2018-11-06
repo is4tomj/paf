@@ -12,7 +12,7 @@ var po = os.Stdout.Write
 var pe = os.Stderr.Write
 var sprintf = fmt.Sprintf
 
-const chunkSize = 2^24
+const initChunkSize = 16777216 // 2^24
 
 func pes(str string) {
 	pe([]byte(str))

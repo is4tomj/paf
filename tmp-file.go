@@ -23,6 +23,7 @@ type Line struct {
 
 var tab = byte("\t"[0])
 var nl = byte("\n"[0])
+
 // Sort will sort lines based on a particular column
 // Sort assumes that each line is valid and is not blank
 func (tf *TmpFile)Sort(col int, decodeFunc func([]byte,[]byte)(int,error)) (*bytes.Buffer, int) {
@@ -56,14 +57,20 @@ func (tf *TmpFile)Sort(col int, decodeFunc func([]byte,[]byte)(int,error)) (*byt
 		if b == nl {
 			// get entire line
 			lineBuff := buff[lStart:i]
-
+			lineBuffLen := len(lineBuff)
 			// get bytes to compare
 			cIdx, cStart, cEnd := 0, 0, 0
 			for j, cb := range lineBuff {
-				if cb == tab {
-					// get entire column if the column we care about
+				if cb == tab || j == lineBuffLen-1 {
+					// get entire column if this column is the column we care about
 					if cIdx == col {
 						cEnd = j
+
+						// if the last char is a EOL, then we need to encrement the cuttoff
+						if j == lineBuffLen - 1 {
+							cEnd++ 
+						}
+
 						break // we don't care about other columns
 					} 
 					
@@ -73,8 +80,12 @@ func (tf *TmpFile)Sort(col int, decodeFunc func([]byte,[]byte)(int,error)) (*byt
 				}
 			}
 			compBytes := make([]byte, 32)
-			_, err := decodeFunc(compBytes, lineBuff[cStart:cEnd])
+			n, err := decodeFunc(compBytes, lineBuff[cStart:cEnd])
+			if n != 32 {
+				panic(errors.New(sprintf("Fuck! This key is not long enough (%d chars)", n)))
+			}
 			if err != nil {
+				pes(sprintf("\n\nSHIT! We got this as the hex string:%s\n\n", lineBuff[cStart:cEnd]))
 				panic(err)
 			}
 
@@ -88,9 +99,8 @@ func (tf *TmpFile)Sort(col int, decodeFunc func([]byte,[]byte)(int,error)) (*byt
 	}
 	
 	numLines := len(lines)
-	if numLines != *(tf.count) {
-		pes(sprintf("FUCK! %s sorted %d but originally %d\n", tf.path, numLines, *(tf.count)))
-		os.Exit(2)
+	if numLines != tf.Count() {
+		panic(sprintf("FUCK! %s sorted %d but originally %d\n", tf.path, numLines, tf.Count()))
 	}
 
 
@@ -98,7 +108,7 @@ func (tf *TmpFile)Sort(col int, decodeFunc func([]byte,[]byte)(int,error)) (*byt
 	sort.Slice(lines, func(i, j int) bool {
 		return bytes.Compare(lines[i].compBytes, lines[j].compBytes) == -1
 	})
-
+	
 	// create and return new buff that is sorted
 	var sortedBuff bytes.Buffer
 	for _, line := range lines {

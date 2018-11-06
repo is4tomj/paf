@@ -15,7 +15,7 @@ func encrypt() {
 	inputFile := crypFlags.String("input-file", "", "file to read")
 	numProcs := crypFlags.Int("num-procs", 1, "number of processors")
 	passphraseFlag := crypFlags.String("passphrase", "", "file to read")
-	chunkSizeFlag := crypFlags.Int("chunk-size", 100000, "approx size of each block")
+	chunkSizeFlag := crypFlags.Int("chunk-size", initChunkSize, sprintf("approx. size of chunks (%d default)",initChunkSize))
 	compressLevelFlag := crypFlags.Int("compress", 0, "change from 1 (best speed) to 9 (best compression), 0 (default) no compression")
 	
 	if err := crypFlags.Parse(os.Args[2:]); err != nil || len(os.Args[2:]) == 0 || *inputFile == "" {
@@ -36,7 +36,7 @@ Examples:
 		if err != nil {
 			panic(err.Error())
 		}
-		passphrase = string(stdin)
+		passphrase = string(stdin) // test
 	}
 
 	file, err := os.Open(*inputFile)
@@ -51,7 +51,7 @@ Examples:
 	pes("Starting to process\n")
 	buffers := make([]*bytes.Buffer, *numProcs)
 	writers := make([]flate.Writer, *numProcs)
-	pio.Process(file, chunkSize*(*chunkSizeFlag), *numProcs, func(pid int, fileSize int64) {
+	pio.Process(file,*chunkSizeFlag, *numProcs, func(pid int, fileSize int64) {
 		var b bytes.Buffer
 		buffers[pid] = &b
 		w, err := flate.NewWriter(&b, *compressLevelFlag)

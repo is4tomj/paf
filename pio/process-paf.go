@@ -53,7 +53,7 @@ func findDataChunks(file *os.File, chunkSize int) ([]*Chunk, int64, error) {
 
 	const maxInt = 2147483647
 	if chunkSize <= 1024 {
-		panic(sprintf("%s Chunk size cannot be less than one KB.", Ep))
+		panic(sprintf("%s Chunk size is %d, but cannot be less than one KB.", Ep, chunkSize))
 	}
 
 	fileStats, err := file.Stat()
