@@ -17,7 +17,7 @@ func Process(file *os.File, chunkSize, numProcs int, initFunc func(int, int64), 
 	// Create chunkChan
 	numChunks := len(chunks)
 	chunksChan := make(chan *Chunk, numChunks)
-	for i:=0; i<numChunks; i++ {
+	for i := 0; i < numChunks; i++ {
 		chunksChan <- chunks[i]
 	}
 
@@ -34,7 +34,7 @@ func Process(file *os.File, chunkSize, numProcs int, initFunc func(int, int64), 
 			for chunk := range chunksChan {
 				numToGo := len(chunksChan)
 				numDone := numChunks - numToGo
-				pes(sprintf("\rprocessed %d of %d (%d%%) chunks", numDone, numChunks, (numDone*100)/numChunks))
+				pes(sprintf("\r  processing %d chunk of %d (%d%%) chunks", numDone, numChunks, (numDone*100)/numChunks))
 				if processFunc != nil {
 					processFunc(pid, chunk)
 				}
@@ -79,14 +79,14 @@ func findDataChunks(file *os.File, chunkSize int) ([]*Chunk, int64, error) {
 		if err != nil && err != io.EOF {
 			return nil, fileSize, err
 		}
-		
+
 		// last chunk
 		if err == io.EOF {
 			dataSize := int(fileSize - entryPoint)
 			chunks[i] = &Chunk{entryPoint, dataSize, dataSize, file}
 			break
 		}
-		
+
 		j := n - 1
 		for j >= 0 {
 			if buff[j] == Nl {
