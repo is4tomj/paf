@@ -1,23 +1,24 @@
 package main
 
 import (
-	"io/ioutil"
-	"os"
-	"sync"
 	"bytes"
 	"errors"
+	"io/ioutil"
+	"os"
 	"sort"
+	"sync"
 )
 
 type TmpFile struct {
-	path string
-	buff *bytes.Buffer
-	mux *sync.Mutex
+	Index int
+	path  string
+	buff  *bytes.Buffer
+	mux   *sync.Mutex
 	count *int
 }
 
 type Line struct {
-	buff []byte
+	buff      []byte
 	compBytes []byte
 }
 
@@ -26,30 +27,29 @@ var nl = byte("\n"[0])
 
 // Sort will sort lines based on a particular column
 // Sort assumes that each line is valid and is not blank
-func (tf *TmpFile)Sort(col int, decodeFunc func([]byte,[]byte)(int,error)) (*bytes.Buffer, int) {
+func (tf *TmpFile) Sort(col int, decodeFunc func([]byte, []byte) (int, error)) (*bytes.Buffer, int) {
 	buff, err := ioutil.ReadFile(tf.path)
 	if err != nil { // according to docs, err should not be EOF if successful
 		panic(err.Error())
 	}
-
 
 	// find num lines and check for issues
 	lineCount := 0
 	prevEoL := -1
 	for i, b := range buff {
 		if b == nl {
-			
+
 			// check for blank line
 			if prevEoL == i-1 {
 				panic(errors.New("Line is blank.\n"))
 			}
 			prevEoL = i
-			
+
 			// if no errors update line count
 			lineCount++
 		}
 	}
-	
+
 	// parse lines
 	lines := make([]Line, lineCount)
 	lIdx, lStart := 0, 0
@@ -67,13 +67,13 @@ func (tf *TmpFile)Sort(col int, decodeFunc func([]byte,[]byte)(int,error)) (*byt
 						cEnd = j
 
 						// if the last char is a EOL, then we need to encrement the cuttoff
-						if j == lineBuffLen - 1 {
-							cEnd++ 
+						if j == lineBuffLen-1 {
+							cEnd++
 						}
 
 						break // we don't care about other columns
-					} 
-					
+					}
+
 					// update column index
 					cStart = j + 1
 					cIdx++
@@ -94,21 +94,20 @@ func (tf *TmpFile)Sort(col int, decodeFunc func([]byte,[]byte)(int,error)) (*byt
 
 			// prepare for next line
 			lIdx++
-			lStart = i+1
+			lStart = i + 1
 		}
 	}
-	
+
 	numLines := len(lines)
 	if numLines != tf.Count() {
 		panic(sprintf("FUCK! %s sorted %d but originally %d\n", tf.path, numLines, tf.Count()))
 	}
 
-
 	// sort lines
 	sort.Slice(lines, func(i, j int) bool {
 		return bytes.Compare(lines[i].compBytes, lines[j].compBytes) == -1
 	})
-	
+
 	// create and return new buff that is sorted
 	var sortedBuff bytes.Buffer
 	for _, line := range lines {
@@ -119,17 +118,17 @@ func (tf *TmpFile)Sort(col int, decodeFunc func([]byte,[]byte)(int,error)) (*byt
 	return &sortedBuff, numLines
 }
 
-func (tf TmpFile)Count() int {
+func (tf TmpFile) Count() int {
 	return *(tf.count)
 }
 
 // write will put the bites in a buffer for the tmp file
-func (tf TmpFile)Write(b []byte) {
+func (tf TmpFile) Write(b []byte) {
 	tf.mux.Lock()
 	tf.buff.Write(b)
 	tf.buff.WriteByte(nl)
 	*(tf.count) += 1
-	if tf.buff.Len() > 1024 * 10 { // flush if buff is getting bigger than a 10KB
+	if tf.buff.Len() > 1024*10 { // flush if buff is getting bigger than a 10KB
 		tf.Flush()
 	}
 	tf.mux.Unlock()
@@ -137,7 +136,7 @@ func (tf TmpFile)Write(b []byte) {
 
 // flush writes the data in buff to disk.
 // WARNGING: flush is not a thread-safe function!!!
-func (tf TmpFile)Flush() {
+func (tf TmpFile) Flush() {
 	if tf.buff.Len() > 0 {
 		f, err := os.OpenFile(tf.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {

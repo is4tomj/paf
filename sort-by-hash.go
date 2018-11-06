@@ -1,14 +1,14 @@
 package main
 
 import (
-	"encoding/hex"
-	"encoding/base64"
-	"paf/pio"
 	"bytes"
+	"encoding/base64"
+	"encoding/hex"
 	"flag"
-	"os"
 	"io"
 	"io/ioutil"
+	"os"
+	"paf/pio"
 	"sync"
 	"time"
 )
@@ -27,7 +27,7 @@ func deleteTmpDir(path string) {
 func sortByHash() {
 	sortFlags := flag.NewFlagSet("hash", flag.ContinueOnError)
 	numProcs := sortFlags.Int("num-procs", 1, "number of processors")
-	chunkSize := sortFlags.Int("chunk-size", initChunkSize, sprintf("approx. size of chunks (%d default)",initChunkSize))
+	chunkSize := sortFlags.Int("chunk-size", initChunkSize, sprintf("approx. size of chunks (%d default)", initChunkSize))
 	inputFile := sortFlags.String("input-file", "", "file to read")
 	column := sortFlags.Int("col", 0, "zero-based column number with hash to sort by")
 
@@ -60,11 +60,11 @@ Examples:
 
 	// initialize tmpfiles
 	const max = 0xFFFF
-	tmpFiles := make([]*TmpFile,max+1)
-	for i:=0; i<=max; i++ {
-		path := (*tmpPath)+sprintf("/%04x",uint16(i))
+	tmpFiles := make([]*TmpFile, max+1)
+	for i := 0; i <= max; i++ {
+		path := (*tmpPath) + sprintf("/%04x", uint16(i))
 		count := 0
-		tmpFiles[i] = &TmpFile{path: path, buff: &bytes.Buffer{}, mux: &sync.Mutex{}, count: &count}
+		tmpFiles[i] = &TmpFile{Index: i, path: path, buff: &bytes.Buffer{}, mux: &sync.Mutex{}, count: &count}
 	}
 
 	// set decode function for comparisons
@@ -73,11 +73,10 @@ Examples:
 		decodeFunc = base64.URLEncoding.Decode
 	}
 
-
 	start := time.Now()
 	if *skipPresortFlag {
 		pes("Skipping presort\n")
-		
+
 	} else {
 		pes("Presorting into tmp files.\n")
 		pio.Process(file, *chunkSize, *numProcs, nil, func(pid int, chunk *pio.Chunk) {
@@ -93,9 +92,9 @@ Examples:
 				// traverse lines
 				scan := pio.NewLineScanner(buff)
 				for line, lineLen := scan(); lineLen > 0; line, lineLen = scan() {
-					
+
 					// read line
-					hashEncBytes := bytes.Split(line,[]byte("\t"))[*column]
+					hashEncBytes := bytes.Split(line, []byte("\t"))[*column]
 					hashDecBytes := make([]byte, 32)
 					_, err := decodeFunc(hashDecBytes, hashEncBytes)
 					if err != nil {
@@ -103,19 +102,20 @@ Examples:
 						panic(0)
 					}
 					// get the first (most significant) two bytes
-					idx := int32(uint16(hashDecBytes[0]) << 8 | uint16(hashDecBytes[1]))
+					idx := int32(uint16(hashDecBytes[0])<<8 | uint16(hashDecBytes[1]))
 					tf := *(tmpFiles[idx])
 					tf.Write(line)
 				}
 			}
 		})
 	}
-	
+
 	// flush tmpFiles and create sorting channel
-	tmpFileSortChan := make(chan *TmpFile, max + 1)
-	doneChan := make(chan *TmpFile, max + 1)
+	tmpFileSortChan := make(chan *TmpFile, max+1)
+	doneChan := make(chan *TmpFile, max+1)
+
 	pes("Flushing tmp files.\n")
-	for i:=0; i<=max; i++ {
+	for i := 0; i <= max; i++ {
 		tmpFile := tmpFiles[i]
 		if *skipPresortFlag == false {
 			(*tmpFile).Flush()
@@ -126,59 +126,57 @@ Examples:
 
 	// sort tmp files
 	start = time.Now()
-	var wg sync.WaitGroup
-	wg.Add(*numProcs)
 	for i := 0; i < *numProcs; i++ {
 		go func(pid int) {
-			defer wg.Done()
 			for tmpFile := range tmpFileSortChan {
 				// sort
-				done := len(doneChan)
-				pes(sprintf("\rSorting each tmp file and finished %d of %d (%d%%)", done, max, (done*100)/max))
 				tf := *tmpFile
 				sortedBuff, _ := tf.Sort(*column, decodeFunc)
-				ioutil.WriteFile(tf.path+".sorted", sortedBuff.Bytes(), 0644)
-				doneChan <- tmpFile
+				if err = ioutil.WriteFile(tf.path+".sorted", sortedBuff.Bytes(), 0644); err != nil {
+					panic(err)
+				}
 
 				// delete original tmp file
 				if err = os.Remove(tf.path); err != nil {
 					panic(err)
 				}
+				doneChan <- tmpFile
 			}
 		}(i)
 	}
-
+	// close here so that Go runtime does not think there is a deadlock issue
 	close(tmpFileSortChan)
-	wg.Wait()
-	close(doneChan)
 
-	pes("\nFinished sorting in each tmp file.\n")
-	pes(sprintf("  finished in %.2f minutes.\n", time.Now().Sub(start).Minutes()))
+	doneBuff := make([]*TmpFile, max+1)
+	idx := 0
+	for i := 0; i <= max; i++ {
+		doneTF := <-doneChan
+		doneBuff[doneTF.Index] = doneTF
 
+		for ; idx <= max && doneBuff[idx] != nil; idx++ {
+			pes(sprintf("\rSorting %d%%", (idx*100)/max))
 
-	// append files to stdout and delete tmp files.
-	start = time.Now()
-	for i:=0; i<=max; i++ {
-		pes(sprintf("\rConcatenating tmp files: %d of %d (%d%%)", i+1, max, 100*(i+1)/max))
-		tf := *(tmpFiles[i])
-		
-		in, err := os.Open(tf.path+".sorted")
-		if err != nil {
-			panic(err)
-		}
-		
-		_, err = io.Copy(os.Stdout, in)
-		if err != nil {
-			panic(err)
-		}
-		in.Close()
+			tf := doneBuff[idx]
+			in, err := os.Open(tf.path + ".sorted")
+			if err != nil {
+				panic(err)
+			}
 
-		// delete sorted tmp file
-		if err = os.Remove(tf.path+".sorted"); err != nil {
-			panic(err)
+			_, err = io.Copy(os.Stdout, in)
+			if err != nil {
+				panic(err)
+			}
+			in.Close()
+
+			// delete sorted tmp file
+			if err = os.Remove(tf.path + ".sorted"); err != nil {
+				panic(err)
+			}
 		}
 	}
-	pes(sprintf("  finished in %.2f minutes.\n", time.Now().Sub(start).Minutes()))
-	
+	close(doneChan)
+
+	pes(sprintf("\n  finished in %.2f minutes.\n", time.Now().Sub(start).Minutes()))
+
 	deleteTmpDir(*tmpPath)
 }
