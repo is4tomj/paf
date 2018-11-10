@@ -1,13 +1,13 @@
 package main
 
 import (
-	"os"
-	"io/ioutil"
-	"flag"
 	"bufio"
 	"bytes"
-	"paf/pio"
 	"compress/flate"
+	"flag"
+	"io/ioutil"
+	"os"
+	"paf/pio"
 )
 
 func encrypt() {
@@ -15,9 +15,9 @@ func encrypt() {
 	inputFile := crypFlags.String("input-file", "", "file to read")
 	numProcs := crypFlags.Int("num-procs", 1, "number of processors")
 	passphraseFlag := crypFlags.String("passphrase", "", "file to read")
-	chunkSizeFlag := crypFlags.Int("chunk-size", initChunkSize, sprintf("approx. size of chunks (%d default)",initChunkSize))
+	chunkSizeFlag := crypFlags.Int("chunk-size", initChunkSize, sprintf("approx. size of chunks (%d default)", initChunkSize))
 	compressLevelFlag := crypFlags.Int("compress", 0, "change from 1 (best speed) to 9 (best compression), 0 (default) no compression")
-	
+
 	if err := crypFlags.Parse(os.Args[2:]); err != nil || len(os.Args[2:]) == 0 || *inputFile == "" {
 		pes(`
 Enc lets you encrypt a paf using Go's GCM cipher. The passphrase can be passed using STDIN. The result is printed to STDOUT.
@@ -28,7 +28,6 @@ Examples:
 `)
 		os.Exit(1)
 	}
-
 
 	passphrase := *passphraseFlag
 	if passphrase == "" {
@@ -51,7 +50,7 @@ Examples:
 	pes("Starting to process\n")
 	buffers := make([]*bytes.Buffer, *numProcs)
 	writers := make([]flate.Writer, *numProcs)
-	pio.Process(file,*chunkSizeFlag, *numProcs, func(pid int, fileSize int64) {
+	pio.Process(file, *chunkSizeFlag, *numProcs, func(pid int, fileSize int64) {
 		var b bytes.Buffer
 		buffers[pid] = &b
 		w, err := flate.NewWriter(&b, *compressLevelFlag)
@@ -59,10 +58,10 @@ Examples:
 			panic(err)
 		}
 		writers[pid] = *w
-		
+
 	}, func(pid int, chunk *pio.Chunk) {
 		buff, n, err := (*chunk).Bytes(nil)
-		
+
 		if err != nil {
 			pes(err.Error())
 			os.Exit(1)
