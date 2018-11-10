@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"runtime"
 	"runtime/pprof"
-	"log"
 )
 
 var po = os.Stdout.Write
@@ -41,10 +41,8 @@ gen-salts: generate salts
 `)
 	} else {
 		switch os.Args[1] {
-		case "gen-creds":
-			genCreds()
-		case "gen-salts":
-			genSalts()
+		case "cat":
+			cat()
 		case "hash":
 			hash()
 		case "sort":
@@ -53,6 +51,10 @@ gen-salts: generate salts
 			encrypt()
 		case "dec":
 			decrypt()
+		case "gen-creds":
+			genCreds()
+		case "gen-salts":
+			genSalts()
 		}
 
 	}
