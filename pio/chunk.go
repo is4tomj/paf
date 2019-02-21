@@ -6,16 +6,19 @@ import (
 	"os"
 )
 
+// Chunk is a pafio privitive that comprises a subset of a file
 type Chunk struct {
 	EntryPoint int64 // in bytes
 	Size       int   // in bytes
 	DataSize   int   // in bytes
-	file *os.File
+	Index      int   // order of chunk
+	file       *os.File
 }
 
-func (chunk *Chunk)Bytes(buff *[]byte) ([]byte, int, error) {
+// Bytes returns the bytes in a chunk
+func (chunk *Chunk) Bytes(buff *[]byte) ([]byte, int, error) {
 	file := chunk.file
-	
+
 	// check if byte buffer is already provided
 	if buff == nil || cap(*buff) < chunk.Size {
 		arr := make([]byte, chunk.Size+4096) // 4096 is a magic number
@@ -39,7 +42,7 @@ func (chunk *Chunk)Bytes(buff *[]byte) ([]byte, int, error) {
 	return partial, n, nil
 }
 
-// Create Scanner that is '\n' delimited
+// NewLineScanner creates a scanner that is '\n' delimited
 func NewLineScanner(b []byte) func() ([]byte, int) {
 	start := -1
 	end := -1
@@ -50,7 +53,7 @@ func NewLineScanner(b []byte) func() ([]byte, int) {
 			return nil, 0
 		}
 		for start = end; end < max; end++ {
-			if b[end] == Nl { // look for newline char
+			if b[end] == nl { // look for newline char
 				return b[start:end], end - start
 			}
 		}

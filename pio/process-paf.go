@@ -53,7 +53,7 @@ func findDataChunks(file *os.File, chunkSize int) ([]*Chunk, int64, error) {
 
 	const maxInt = 2147483647
 	if chunkSize <= 1024 {
-		panic(sprintf("%s Chunk size is %d, but cannot be less than one KB.", Ep, chunkSize))
+		panic(sprintf("%s Chunk size is %d, but cannot be less than one KB.", ep, chunkSize))
 	}
 
 	fileStats, err := file.Stat()
@@ -83,14 +83,26 @@ func findDataChunks(file *os.File, chunkSize int) ([]*Chunk, int64, error) {
 		// last chunk
 		if err == io.EOF {
 			dataSize := int(fileSize - entryPoint)
-			chunks[i] = &Chunk{entryPoint, dataSize, dataSize, file}
+			chunks[i] = &Chunk{
+				EntryPoint: entryPoint,
+				Size:       dataSize,
+				DataSize:   dataSize,
+				Index:      i,
+				file:       file,
+			}
 			break
 		}
 
 		j := n - 1
 		for j >= 0 {
-			if buff[j] == Nl {
-				chunks[i] = &Chunk{entryPoint, size, size, file}
+			if buff[j] == nl {
+				chunks[i] = &Chunk{
+					EntryPoint: entryPoint,
+					Size:       size,
+					DataSize:   size,
+					Index:      i,
+					file:       file,
+				}
 				entryPoint = entryPoint + int64(size)
 				size = chunkSize
 				break

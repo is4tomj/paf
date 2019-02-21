@@ -1,22 +1,23 @@
 package pio
 
 import (
-	"crypto/sha256"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"errors"
-	"sync"
-	"os"
-	"io"
+	"crypto/sha256"
 	"encoding/binary"
+	"io"
+	"os"
+	"sync"
 )
 
-func createKey(passphrase []byte) [32]byte {
+// CreateKey is a PBKDF using sha256
+func CreateKey(passphrase []byte) [32]byte {
 	return sha256.Sum256(passphrase)
 }
 
-func encrypt(data []byte, key [32]byte) []byte {
+// Encrypt encrypts data using a 32-byte key using GCM
+func Encrypt(data []byte, key [32]byte) []byte {
 	block, _ := aes.NewCipher(key[:])
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
@@ -31,7 +32,8 @@ func encrypt(data []byte, key [32]byte) []byte {
 	return ciphertext
 }
 
-func decrypt(data []byte, key [32]byte) []byte {
+// Decrypt decrypts data using a 32-byte key using GCM
+func Decrypt(data []byte, key [32]byte) []byte {
 	block, err := aes.NewCipher(key[:])
 	if err != nil {
 		panic(err.Error())
@@ -49,28 +51,29 @@ func decrypt(data []byte, key [32]byte) []byte {
 	return plaintext
 }
 
-const maxChunks = uint64(1 << 32) - 1
-// This will generate a file comprising encrypted chunks:
+const maxChunks = uint64(1<<32) - 1
+
+// NewEncryptedPafWriter will generate a file comprising encrypted chunks:
 // length, E(chunk1), length, E(chunk2) ...
 // The file is encrypted using GCM 256-bit encryption,
 // which is defined in NIST 800-38D. Each chunk is encrypted
 // with its own nonce. Accordingly, the number of chunks
 // should never be more than 2^32 chunks.
 // See [golang docs](https://golang.org/pkg/crypto/cipher/#example_NewGCM_encrypt)
-func NewEncryptedPafWriter(file *os.File, passphrase string) func([]byte)error {
+func NewEncryptedPafWriter(file *os.File, passphrase string) func([]byte) error {
 	if passphrase == "" {
-		panic(errors.New("Fuck! No passphrase provided."))
+		panic(newErr("no passphrase provided"))
 	}
 
 	if file == nil {
-		panic(errors.New("Fuck! Output file was not valid."))
+		panic(newErr("output file was not valid"))
 	}
 	f := file
 
 	// init values for first block written
 	count := uint64(0)
 	lenbuf := make([]byte, 4)
-	key := createKey([]byte(passphrase))
+	key := CreateKey([]byte(passphrase))
 	mux := &sync.Mutex{}
 
 	return func(data []byte) error {
@@ -82,8 +85,8 @@ func NewEncryptedPafWriter(file *os.File, passphrase string) func([]byte)error {
 		}
 
 		// compute cipher text
-		ciphertext := encrypt(data, key) // reuse key but get a different nonce
-		clen := uint32(len(ciphertext)) // chunks can never be more than 2^32 bytes
+		ciphertext := Encrypt(data, key) // reuse key but get a different nonce
+		clen := uint32(len(ciphertext))  // chunks can never be more than 2^32 bytes
 
 		// output results by appending to files
 		binary.LittleEndian.PutUint32(lenbuf, clen)
@@ -100,24 +103,25 @@ func NewEncryptedPafWriter(file *os.File, passphrase string) func([]byte)error {
 
 type encryptedChunk struct {
 	entryPoint int64
-	size int
+	size       int
 }
 
+// ProcessEncryptedPaf processes chunks in a PAF-encrypted file
 func ProcessEncryptedPaf(file *os.File, passphrase string, numProcs int, initFunc func(int), processFunc func(int, []byte)) {
 	if passphrase == "" {
-		panic(errors.New("Fuck! No passphrase provided."))
+		panic(newErr("no passphrase provided"))
 	}
 
 	fInfo, err := file.Stat()
-	if err != nil  {
-		panic(errors.New("Fuck! Output file was not valid."))
+	if err != nil {
+		panic(newErr("input file was not valid"))
 	}
 	f := file
 	flen := fInfo.Size()
 
 	// init values for first block written
 	lenbuf := make([]byte, 4)
-	key := createKey([]byte(passphrase))
+	key := CreateKey([]byte(passphrase))
 
 	// find out how many chunks are in the file
 	pes("Finding chunks in file...\r")
@@ -125,7 +129,7 @@ func ProcessEncryptedPaf(file *os.File, passphrase string, numProcs int, initFun
 	for i := int64(0); i < flen; {
 		n, err := f.ReadAt(lenbuf, i)
 		if n <= 0 {
-			panic(errors.New("Fuck! Calculated a chunk size of zero."))
+			panic(newErr("calculated a chunk size of zero"))
 		}
 		if err != nil && err != io.EOF {
 			panic(err)
@@ -144,18 +148,18 @@ func ProcessEncryptedPaf(file *os.File, passphrase string, numProcs int, initFun
 	for i := int64(0); i < flen; {
 		n, err := f.ReadAt(lenbuf, i)
 		if n <= 0 {
-			panic(errors.New("Fuck! Calculated a chunk size of zero."))
+			panic(newErr("calculated a chunk size of zero"))
 		}
 		if err != nil && err != io.EOF {
 			panic(err)
 		}
 
 		len := binary.LittleEndian.Uint32(lenbuf)
-		eChunksChan <- &encryptedChunk{i+int64(4),int(len)}
-		
+		eChunksChan <- &encryptedChunk{i + int64(4), int(len)}
+
 		i += 4
 		i += int64(len)
-		
+
 		if err == io.EOF {
 			break
 		}
@@ -179,14 +183,14 @@ func ProcessEncryptedPaf(file *os.File, passphrase string, numProcs int, initFun
 					eDataBuff := make([]byte, eChunk.size)
 					n, err := f.ReadAt(eDataBuff, eChunk.entryPoint)
 					if n <= 0 {
-						panic(errors.New("Fuck! Could not read eChunk."))
+						panic(newErr("could not read eChunk"))
 					}
 					if err != nil && err != io.EOF {
 						panic(err)
 					}
-					
-					buff := decrypt(eDataBuff, key)
-					
+
+					buff := Decrypt(eDataBuff, key)
+
 					processFunc(pid, buff)
 				}
 			}
@@ -198,4 +202,3 @@ func ProcessEncryptedPaf(file *os.File, passphrase string, numProcs int, initFun
 	wg.Wait()
 	pes(sprintf("\rFinished processing %d encrypted chunks.\t\t\n", numChunks))
 }
-

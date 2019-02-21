@@ -38,11 +38,19 @@ func main() {
 		pes(`
 gen-creds: generate usernames-password pairs
 gen-salts: generate salts
+pack
+cc
+hash
+sort
+enc
+dec
 `)
 	} else {
 		switch os.Args[1] {
-		case "cat":
-			cat()
+		case "pack":
+			pack()
+		case "cc":
+			cc()
 		case "hash":
 			hash()
 		case "sort":

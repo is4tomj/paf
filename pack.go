@@ -4,26 +4,31 @@ import (
 	"flag"
 	"io"
 	"os"
+	"paf/pio"
 	"path/filepath"
 )
 
-func cat() {
-	catFlags := flag.NewFlagSet("cryp", flag.ContinueOnError)
-	chunkSizeFlag := catFlags.Int("chunk-size", initChunkSize, sprintf("approx. size of chunks (%d default)", initChunkSize))
-	verboseFlag := catFlags.Bool("v", false, "verbose")
+func pack() {
+	packFlags := flag.NewFlagSet("pack", flag.ContinueOnError)
+	chunkSizeFlag := packFlags.Int("chunk-size", initChunkSize, sprintf("approx. size of chunks (%d default)", initChunkSize))
+	passphraseFlag := packFlags.String("passphrase", "", "passphrase to encrypt paf")
+	compressionLevelFlag := packFlags.Int("compress", 0, "level of compression from 1-9, 0 is no compression")
+	verboseFlag := packFlags.Bool("v", false, "verbose")
 
-	if err := catFlags.Parse(os.Args[2:]); err != nil || len(os.Args[2:]) == 0 {
+	plaintextOutFlag := packFlags.Bool("plaintext-out", false, "output data in plain text, not PaF format")
+
+	if err := packFlags.Parse(os.Args[2:]); err != nil || len(os.Args[2:]) == 0 {
 		pes(`
-Cat reads a file and outputs the file to standard out in PAF format
+Pack reads one or more files and outputs the file to standard out in PAF format. This is a serial process to preserve order.
 
 Examples:
-  $ paf cat creds1.txt creds2.txt creds3.txt > creds.paf
-  $ paf cat --num-procs=4 --chunk-size=2048000 creds.txt | creds.paf
+  $ paf pack creds1.txt creds2.txt creds3.txt > creds.paf
+  $ paf pack --chunk-size=2048000 creds.txt | creds.paf
 `)
 		os.Exit(1)
 	}
 
-	filePaths := catFlags.Args()
+	filePaths := packFlags.Args()
 	if len(filePaths) == 0 {
 		pes("No file names or paths given\n")
 		os.Exit(1)
@@ -53,7 +58,18 @@ Examples:
 	buff := make([]byte, *chunkSizeFlag)
 	buffOffset := 0
 	fileOffset := int64(0)
-	bytesRead := int64(0)
+	var pass *string = nil
+	if *passphraseFlag != "" {
+		pass = passphraseFlag
+	}
+
+	var pafWrite func([]byte) error
+	if *plaintextOutFlag == true {
+		pafWrite = pio.NewPlainWriter(os.Stdout, totalSize, *verboseFlag)
+	} else {
+		pafWrite = pio.NewPafWriterV100(os.Stdout, pass, *compressionLevelFlag, totalSize, *verboseFlag)
+	}
+
 	for _, path := range allFilePaths {
 		f, err := os.Open(path)
 		if err != nil {
@@ -78,14 +94,7 @@ Examples:
 
 					if buff[i] == nl {
 						// output buffer until the last \n char
-						os.Stdout.Write(buff[:i+1]) // +1 because golang is exclusive of upperbound
-
-						if *verboseFlag {
-							// +1 because golang is exclusive of upper bound
-							// +1 because i starts at buffOffset-1
-							bytesRead += int64(i + 1)
-							pes(sprintf("\r%d%% %d of %d bytes", 100*bytesRead/totalSize, bytesRead, totalSize))
-						}
+						pafWrite(buff[:i+1]) // +1 because golang is exclusive of upperbound
 
 						// copy remaining bytes in buff to the front of buff
 						copy(buff, buff[i+1:])
@@ -106,11 +115,9 @@ Examples:
 		f.Close()
 	}
 
-	os.Stdout.Write(buff[:buffOffset]) // flush anything left in the buffer
-
-	if *verboseFlag {
-		// update status
-		bytesRead += int64(buffOffset)
-		pes(sprintf("\r%d%% %d of %d bytes\n", 100*bytesRead/totalSize, bytesRead, totalSize))
+	// flush anything left in the buffer
+	if buffOffset > 0 {
+		pafWrite(buff[:buffOffset])
 	}
+	pes("\n")
 }

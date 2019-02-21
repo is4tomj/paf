@@ -147,6 +147,8 @@ Examples:
 	// close here so that Go runtime does not think there is a deadlock issue
 	close(tmpFileSortChan)
 
+	// This next part runs in the background while the tmp files are being sorted
+	// and outputs the next sorted tmp file in order.
 	doneBuff := make([]*TmpFile, max+1)
 	idx := 0
 	for i := 0; i <= max; i++ {
