@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -8,14 +9,21 @@ import (
 	"runtime/pprof"
 )
 
+const initChunkSize = 16777216 // 2^24
+const ep = "ლ(ಠ益ಠლ)"
+
 var po = os.Stdout.Write
 var pe = os.Stderr.Write
 var sprintf = fmt.Sprintf
 
-const initChunkSize = 16777216 // 2^24
-
 func pes(str string) {
 	pe([]byte(str))
+}
+func pesf(format string, args ...interface{}) {
+	pe([]byte(sprintf(format, args...)))
+}
+func newErr(str string) error {
+	return errors.New(ep + str)
 }
 
 func main() {

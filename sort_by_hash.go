@@ -14,13 +14,8 @@ import (
 )
 
 func deleteTmpDir(path string) {
-	pes(sprintf("Deleting path: %s\n", path))
-	if _, err := os.Stat(path); os.IsExist(err) {
-		err := os.RemoveAll(path)
-		if err != nil {
-			pes(err.Error())
-			os.Exit(1)
-		}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		os.RemoveAll(path)
 	}
 }
 
@@ -41,7 +36,7 @@ func sortByHash() {
 		pes(`
 Sort a column in a paf file with hash and print to stdout.
 Examples:
-    $ paf sort --num-procs 4 --input-file input.paf --col=0 --tmp-dir data/tmp
+    $ paf sort --num-procs 4 --input-file input.paf --col=0 --tmp-falsedir data/tmp
 `)
 		os.Exit(1)
 	}
@@ -60,11 +55,11 @@ Examples:
 
 	// initialize tmpfiles
 	const max = 0xFFFF
-	tmpFiles := make([]*TmpFile, max+1)
+	tmpFiles := make([]*tmpFile, max+1)
 	for i := 0; i <= max; i++ {
 		path := (*tmpPath) + sprintf("/%04x", uint16(i))
 		count := 0
-		tmpFiles[i] = &TmpFile{Index: i, path: path, buff: &bytes.Buffer{}, mux: &sync.Mutex{}, count: &count}
+		tmpFiles[i] = &tmpFile{Index: i, path: path, buff: &bytes.Buffer{}, mux: &sync.Mutex{}, count: &count}
 	}
 
 	// set decode function for comparisons
@@ -91,15 +86,15 @@ Examples:
 			} else {
 				// traverse lines
 				scan := pio.NewLineScanner(buff)
+				hashDecBytes := make([]byte, 64)
 				for line, lineLen := scan(); lineLen > 0; line, lineLen = scan() {
 
 					// read line
 					hashEncBytes := bytes.Split(line, []byte("\t"))[*column]
-					hashDecBytes := make([]byte, 32)
-					_, err := decodeFunc(hashDecBytes, hashEncBytes)
+					n, err := decodeFunc(hashDecBytes, hashEncBytes)
 					if err != nil {
-						pes("Shit!")
-						panic(0)
+						pesf("\n\nn: %d\n\n", n)
+						panic(err)
 					}
 					// get the first (most significant) two bytes
 					idx := int32(uint16(hashDecBytes[0])<<8 | uint16(hashDecBytes[1]))
@@ -111,8 +106,8 @@ Examples:
 	}
 
 	// flush tmpFiles and create sorting channel
-	tmpFileSortChan := make(chan *TmpFile, max+1)
-	doneChan := make(chan *TmpFile, max+1)
+	tmpFileSortChan := make(chan *tmpFile, max+1)
+	doneChan := make(chan *tmpFile, max+1)
 
 	pes("Flushing tmp files.\n")
 	for i := 0; i <= max; i++ {
@@ -131,15 +126,18 @@ Examples:
 			for tmpFile := range tmpFileSortChan {
 				// sort
 				tf := *tmpFile
-				sortedBuff, _ := tf.Sort(*column, decodeFunc)
-				if err = ioutil.WriteFile(tf.path+".sorted", sortedBuff.Bytes(), 0644); err != nil {
-					panic(err)
+				sortedBuff, n := tf.Sort(*column, decodeFunc)
+				if n > 0 {
+					if err = ioutil.WriteFile(tf.path+".sorted", sortedBuff.Bytes(), 0644); err != nil {
+						panic(err)
+					}
+
+					// delete original tmp file
+					if err = os.Remove(tf.path); err != nil {
+						panic(err)
+					}
 				}
 
-				// delete original tmp file
-				if err = os.Remove(tf.path); err != nil {
-					panic(err)
-				}
 				doneChan <- tmpFile
 			}
 		}(i)
@@ -149,7 +147,7 @@ Examples:
 
 	// This next part runs in the background while the tmp files are being sorted
 	// and outputs the next sorted tmp file in order.
-	doneBuff := make([]*TmpFile, max+1)
+	doneBuff := make([]*tmpFile, max+1)
 	idx := 0
 	for i := 0; i <= max; i++ {
 		doneTF := <-doneChan
@@ -159,20 +157,25 @@ Examples:
 			pes(sprintf("\rSorting %d%%", (idx*100)/max))
 
 			tf := doneBuff[idx]
-			in, err := os.Open(tf.path + ".sorted")
-			if err != nil {
-				panic(err)
-			}
 
-			_, err = io.Copy(os.Stdout, in)
-			if err != nil {
-				panic(err)
-			}
-			in.Close()
+			sortFileName := tf.path + ".sorted"
+			_, err := os.Stat(sortFileName)
+			if os.IsExist(err) {
+				in, err := os.Open(sortFileName)
+				if err != nil {
+					panic(err)
+				}
 
-			// delete sorted tmp file
-			if err = os.Remove(tf.path + ".sorted"); err != nil {
-				panic(err)
+				_, err = io.Copy(os.Stdout, in)
+				if err != nil {
+					panic(err)
+				}
+				in.Close()
+
+				// delete sorted tmp file
+				if err = os.Remove(sortFileName); err != nil {
+					panic(err)
+				}
 			}
 		}
 	}

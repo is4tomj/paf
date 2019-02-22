@@ -1,7 +1,7 @@
 PaF: Parallel af or Passwords are Fucked
 ===========
 
-Golang framework for processing data, particularly credentials, in parallel. Paf comprises libraries, tools, and file format definition for processing data in parallel.
+Toolkit and Golang framework for processing data, particularly credentials, in parallel. Paf comprises libraries, tools, and file format definition for processing data in parallel.
 
 ## Tools
 
