@@ -36,7 +36,7 @@ func sortByHash() {
 		pes(`
 Sort a column in a paf file with hash and print to stdout.
 Examples:
-    $ paf sort --num-procs 4 --input-file input.paf --col=0 --tmp-falsedir data/tmp
+    $ paf sort --num-procs 4 --input-file input.paf --col=0 --tmp-dir data/tmp
 `)
 		os.Exit(1)
 	}
@@ -160,7 +160,7 @@ Examples:
 
 			sortFileName := tf.path + ".sorted"
 			_, err := os.Stat(sortFileName)
-			if os.IsExist(err) {
+			if !os.IsNotExist(err) {
 				in, err := os.Open(sortFileName)
 				if err != nil {
 					panic(err)
