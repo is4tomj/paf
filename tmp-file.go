@@ -27,7 +27,7 @@ var nl = byte("\n"[0])
 
 // Sort will sort lines based on a particular column
 // Sort assumes that each line is valid and is not blank
-func (tf *tmpFile) Sort(col int, decodeFunc func([]byte, []byte) (int, error)) (*bytes.Buffer, int) {
+func (tf *tmpFile) Sort(col int, uniq bool, decodeFunc func([]byte, []byte) (int, error)) (*bytes.Buffer, int) {
 	buff, err := ioutil.ReadFile(tf.path)
 	if err != nil { // according to docs, err should not be EOF if successful
 		if os.IsNotExist(err) {
@@ -56,7 +56,6 @@ func (tf *tmpFile) Sort(col int, decodeFunc func([]byte, []byte) (int, error)) (
 	// parse lines
 	lines := make([]line, lineCount)
 	lIdx, lStart := 0, 0
-	compBytes := make([]byte, 64)
 	for i, b := range buff {
 		if b == nl {
 			// get entire line
@@ -83,6 +82,8 @@ func (tf *tmpFile) Sort(col int, decodeFunc func([]byte, []byte) (int, error)) (
 					cIdx++
 				}
 			}
+
+			compBytes := make([]byte, 64)
 			n, err := decodeFunc(compBytes, lineBuff[cStart:cEnd])
 			if err != nil {
 				pes(sprintf("\n\nSHIT! We got this string as input:%s\n\n", lineBuff[cStart:cEnd]))
@@ -110,12 +111,28 @@ func (tf *tmpFile) Sort(col int, decodeFunc func([]byte, []byte) (int, error)) (
 
 	// create and return new buff that is sorted
 	var sortedBuff bytes.Buffer
-	for _, line := range lines {
-		sortedBuff.Write(line.buff)
-		sortedBuff.WriteByte(nl)
+	if uniq {
+		count := 0
+		if numLines > 0 {
+			count++
+			sortedBuff.Write(lines[0].buff)
+			sortedBuff.WriteByte(nl)
+			for i := 1; i < numLines; i++ {
+				if !bytes.Equal(lines[i-1].compBytes, lines[i].compBytes) {
+					sortedBuff.Write(lines[i].buff)
+					sortedBuff.WriteByte(nl)
+					count++
+				}
+			}
+		}
+		return &sortedBuff, count
+	} else {
+		for _, line := range lines {
+			sortedBuff.Write(line.buff)
+			sortedBuff.WriteByte(nl)
+		}
+		return &sortedBuff, numLines
 	}
-
-	return &sortedBuff, numLines
 }
 
 func (tf *tmpFile) Count() int {

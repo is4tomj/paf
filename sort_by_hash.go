@@ -25,6 +25,7 @@ func sortByHash() {
 	chunkSize := sortFlags.Int("chunk-size", initChunkSize, sprintf("approx. size of chunks (%d default)", initChunkSize))
 	inputFile := sortFlags.String("input-file", "", "file to read")
 	column := sortFlags.Int("col", 0, "zero-based column number with hash to sort by")
+	uniq := sortFlags.Bool("uniq", false, "remove lines with duplicate hashes if true")
 
 	skipPresortFlag := sortFlags.Bool("skip-presort", false, "do not presort (tmp files already generated)")
 
@@ -126,7 +127,7 @@ Examples:
 			for tmpFile := range tmpFileSortChan {
 				// sort
 				tf := *tmpFile
-				sortedBuff, n := tf.Sort(*column, decodeFunc)
+				sortedBuff, n := tf.Sort(*column, *uniq, decodeFunc)
 				if n > 0 {
 					if err = ioutil.WriteFile(tf.path+".sorted", sortedBuff.Bytes(), 0644); err != nil {
 						panic(err)
