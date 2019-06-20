@@ -73,7 +73,7 @@ func findDataChunks(file *os.File, chunkSize int) ([]*Chunk, int64, error) {
 	buff := make([]byte, delta)
 
 	i := 0
-	for ; true; i++ {
+	for true {
 		// get last 1024 bytes of proposed chunk
 		n, err := file.ReadAt(buff, (entryPoint+int64(size))-delta)
 		if err != nil && err != io.EOF {
@@ -105,6 +105,7 @@ func findDataChunks(file *os.File, chunkSize int) ([]*Chunk, int64, error) {
 				}
 				entryPoint = entryPoint + int64(size)
 				size = chunkSize
+				i++
 				break
 			}
 			j--
