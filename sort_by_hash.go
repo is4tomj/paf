@@ -94,8 +94,10 @@ Examples:
 					hashEncBytes := bytes.Split(line, []byte("\t"))[*column]
 					n, err := decodeFunc(hashDecBytes, hashEncBytes)
 					if err != nil {
-						pesf("\n\nn: %d\n\n", n)
-						panic(err)
+						pesf("\n\nn: %d\n: line:%s\n", n, line)
+						pes(err.Error())
+						pesf("Skipping this line and continuing to process remaining data.\n")
+						continue
 					}
 					// get the first (most significant) two bytes
 					idx := int32(uint16(hashDecBytes[0])<<8 | uint16(hashDecBytes[1]))
