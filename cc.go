@@ -4,7 +4,8 @@ import (
 	"flag"
 	"io"
 	"os"
-	"paf/pio"
+
+	"github.com/is4tomj/paf/pio"
 )
 
 func cc() {

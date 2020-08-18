@@ -2,15 +2,17 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"encoding/base64"
 	"encoding/hex"
 	"flag"
 	"io"
 	"io/ioutil"
 	"os"
-	"paf/pio"
 	"sync"
 	"time"
+
+	"github.com/is4tomj/paf/pio"
 )
 
 func deleteTmpDir(path string) {
@@ -19,13 +21,48 @@ func deleteTmpDir(path string) {
 	}
 }
 
+func getHashBytes(decodeFunc func([]byte, []byte) (int, error), hashEncBytes []byte, line []byte, tmpFiles []*tmpFile) {
+	hashDecBytes := make([]byte, 64)
+	n, err := decodeFunc(hashDecBytes, hashEncBytes)
+	if err != nil {
+		pesf("\n\nn: %d\n: line:%s\n", n, line)
+		pes(err.Error())
+		pesf("Skipping this line and continuing to process remaining data.\n")
+		return
+	}
+	// get the first (most significant) two bytes
+	idx := int32(uint16(hashDecBytes[0])<<8 | uint16(hashDecBytes[1]))
+	tf := *(tmpFiles[idx])
+	tf.Write(line)
+}
+
+func genHashBytes(decodeFunc func([]byte, []byte) (int, error), hashEncBytes []byte, line []byte, tmpFiles []*tmpFile) {
+	sum := sha1.Sum(hashEncBytes)
+	hashDecBytes := sum[:]
+	n, err := decodeFunc(hashDecBytes, hashEncBytes)
+	if err != nil {
+		pesf("\n\nn: %d\n: line:%s\n", n, line)
+		pes(err.Error())
+		pesf("Skipping this line and continuing to process remaining data.\n")
+		return
+	}
+	// get the first (most significant) two bytes
+	idx := int32(uint16(hashDecBytes[0])<<8 | uint16(hashDecBytes[1]))
+	tf := *(tmpFiles[idx])
+	tf.Write(hashDecBytes)
+	tf.Write(tabs)
+	tf.Write(line)
+}
+
 func sortByHash() {
 	sortFlags := flag.NewFlagSet("hash", flag.ContinueOnError)
 	numProcs := sortFlags.Int("num-procs", 1, "number of processors")
 	chunkSize := sortFlags.Int("chunk-size", initChunkSize, sprintf("approx. size of chunks (%d default)", initChunkSize))
 	inputFile := sortFlags.String("input-file", "", "file to read")
-	column := sortFlags.Int("col", 0, "zero-based column number with hash to sort by")
 	uniq := sortFlags.Bool("uniq", false, "remove lines with duplicate hashes if true")
+
+	column := sortFlags.Int("col", 0, "zero-based column number with hash to sort by")
+	createHash := sortFlags.Bool("create-hash", false, "hash the selected column if not already a hash")
 
 	skipPresortFlag := sortFlags.Bool("skip-presort", false, "do not presort (tmp files already generated)")
 
@@ -68,6 +105,10 @@ Examples:
 	if *base64Enc {
 		decodeFunc = base64.URLEncoding.Decode
 	}
+	getHashBytesFunc := getHashBytes
+	if *createHash == true {
+		getHashBytesFunc = genHashBytes
+	}
 
 	start := time.Now()
 	if *skipPresortFlag {
@@ -87,22 +128,23 @@ Examples:
 			} else {
 				// traverse lines
 				scan := pio.NewLineScanner(buff)
-				hashDecBytes := make([]byte, 64)
+				//hashDecBytes := make([]byte, 64)
 				for line, lineLen := scan(); lineLen > 0; line, lineLen = scan() {
 
 					// read line
-					hashEncBytes := bytes.Split(line, []byte("\t"))[*column]
-					n, err := decodeFunc(hashDecBytes, hashEncBytes)
-					if err != nil {
-						pesf("\n\nn: %d\n: line:%s\n", n, line)
-						pes(err.Error())
-						pesf("Skipping this line and continuing to process remaining data.\n")
-						continue
-					}
-					// get the first (most significant) two bytes
-					idx := int32(uint16(hashDecBytes[0])<<8 | uint16(hashDecBytes[1]))
-					tf := *(tmpFiles[idx])
-					tf.Write(line)
+					tokens := bytes.Split(line, []byte("\t"))
+					getHashBytesFunc(decodeFunc, tokens[*column], line, tmpFiles)
+					// n, err := decodeFunc(hashDecBytes, hashEncBytes)
+					// if err != nil {
+					// 	pesf("\n\nn: %d\n: line:%s\n", n, line)
+					// 	pes(err.Error())
+					// 	pesf("Skipping this line and continuing to process remaining data.\n")
+					// 	continue
+					// }
+					// // get the first (most significant) two bytes
+					// idx := int32(uint16(hashDecBytes[0])<<8 | uint16(hashDecBytes[1]))
+					// tf := *(tmpFiles[idx])
+					// tf.Write(line)
 				}
 			}
 		})

@@ -23,6 +23,7 @@ type line struct {
 }
 
 var tab = byte("\t"[0])
+var tabs = []byte("\t")
 var nl = byte("\n"[0])
 
 // Sort will sort lines based on a particular column

@@ -4,8 +4,9 @@ import (
 	"flag"
 	"io"
 	"os"
-	"paf/pio"
 	"path/filepath"
+
+	"github.com/is4tomj/paf/pio"
 )
 
 func pack() {

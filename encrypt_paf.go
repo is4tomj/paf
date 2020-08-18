@@ -7,7 +7,8 @@ import (
 	"flag"
 	"io/ioutil"
 	"os"
-	"paf/pio"
+
+	"github.com/is4tomj/paf/pio"
 )
 
 func encrypt() {

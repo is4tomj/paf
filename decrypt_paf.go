@@ -1,14 +1,15 @@
 package main
 
 import (
-	"os"
+	"bufio"
+	"bytes"
+	"compress/flate"
+	"flag"
 	"io"
 	"io/ioutil"
-	"flag"
-	"bufio"
-	"paf/pio"
-	"compress/flate"
-	"bytes"
+	"os"
+
+	"github.com/is4tomj/paf/pio"
 )
 
 func decrypt() {
@@ -36,7 +37,6 @@ Examples:
 		}
 		passphrase = string(stdin)
 	}
-
 
 	file, err := os.Open(*inputFile)
 	if err != nil {

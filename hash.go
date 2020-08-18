@@ -7,8 +7,9 @@ import (
 	"encoding/hex"
 	"flag"
 	"os"
-	"paf/pio"
 	"strings"
+
+	"github.com/is4tomj/paf/pio"
 )
 
 func hexEncode(sum []byte) []byte {
